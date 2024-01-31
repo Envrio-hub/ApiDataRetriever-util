@@ -1,0 +1,15 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+requests = "==2.31.0"
+xmltodict = "==0.13.0"
+pandas = "==2.1.4"
+databases-utils = {ref = "1.1.0", git = "git+https://github.com/Envrio-hub/databases-utils.git"}
+
+[dev-packages]
+
+[requires]
+python_version = "3.12"
