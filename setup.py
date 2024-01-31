@@ -11,7 +11,7 @@ setup(
     install_requires=[  
         'databases_utils>=1.1.0',
         'requests>=2.31.0',
-        'xmltodict=0.13.0',
+        'xmltodict>=0.13.0',
         'pandas>=2.1.4'
     ],
     classifiers=[  
