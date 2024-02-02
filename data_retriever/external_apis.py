@@ -1,19 +1,19 @@
-__version__="1.0.4"
+__version__="1.1.0"
 __authors__=['Ioannis Tsakmakis']
 __date_created__='2023-11-27'
-__last_updated__='2024-01-26'
+__last_updated__='2024-02-02'
 
 import json, requests, xmltodict
 import pandas as pd
 from datetime import datetime, timedelta
 
-with open("local_paths.json","r") as f:
-    local_paths = json.loads(f.read())
+with open("credentials.json","r") as f:
+    credentials = json.loads(f.read())
 
-with open(local_paths['davis'],'r') as r:
+with open(credentials['davis'],'r') as r:
     credentials_davis = json.loads(r.read())
 
-with open(local_paths['metrica'],'r') as r:
+with open(credentials['metrica'],'r') as r:
     credentials_metrica = json.loads(r.read())
 
 class DavisApi():

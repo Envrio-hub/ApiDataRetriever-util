@@ -1,15 +1,15 @@
-__version__='0.0.2'
+__version__='0.0.3'
 __author__=['Ioannis Tsakmakis']
 __date_created__='2024-01-26'
-__last_updated__='2024-01-30'
+__last_updated__='2024-02-02'
 
 import smtplib, json
 from email.message import EmailMessage
 
-with open('local_paths.json','r') as f:
-    local_paths = json.load(f)
+with open('credentials.json','r') as f:
+    credentials = json.load(f)
 
-with open(local_paths['mail'],'r') as f:
+with open(credentials['mail'],'r') as f:
     mail_credentials = json.load(f)
 
 class EmailAlarm():
