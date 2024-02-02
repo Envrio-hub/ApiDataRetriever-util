@@ -13,20 +13,21 @@ class DavisDataRetriever():
 
     def __init__(self, username, local_path):
         self.username = username
-        self.local_path = local_path
+        with open(f'{local_path}/credentials.json','r') as f:
+            self.credential_paths = json.load(f)
 
     def get_data(self):
 
         print(f'\ncronjob - davis started: {datetime.now()}\n')
 
-        # Initiate davis instance
-        davis = DavisApi(user=self.username)
+        with open(self.credential_paths['davis'],'r') as f:
+            credentials = json.load(f)
 
-        with open(f'{self.local_path}/credentials.json','r') as f:
-            local_paths = json.load(f)
+        # Initiate davis instance
+        davis = DavisApi(user=self.username, credentials_davis=credentials)
 
         # Initiate an inlux instance
-        flux = influx.DataManagement(bucket_name='sensors_meters', organization='envrio', conf_file=local_paths['influx'])
+        flux = influx.DataManagement(bucket_name='sensors_meters', organization='envrio', conf_file=self.credential_paths['influx'])
 
         # Retrieve all adcon stations
         stations_info = [{"id":station.Stations.id,"date_created":station.Stations.date_created,"latest_update":station.Stations.latest_update,"code":station.Stations.code} for station in crud.Stations.get_by_brand(brand='davis')]
@@ -72,14 +73,14 @@ class DavisDataRetriever():
 
     def get_data_historic(self, from_datetime, station_code=None):
 
-        # Initiate davis instance
-        davis = DavisApi(user=self.username)
+        with open(self.credential_paths['davis'],'r') as f:
+            credentials = json.load(f)
 
-        with open(f'{self.local_path}/credentials.json','r') as f:
-            local_paths = json.load(f)
+        # Initiate davis instance
+        davis = DavisApi(user=self.username, credentials_davis=credentials)
 
         # Initiate an inlux instance
-        flux = influx.DataManagement(bucket_name='sensors_meters', organization='envrio', conf_file=local_paths['influx'])
+        flux = influx.DataManagement(bucket_name='sensors_meters', organization='envrio', conf_file=self.credential_paths['influx'])
 
         # Retrieve all adcon stations
         if station_code:
@@ -123,18 +124,19 @@ class MetricaDataRetriever():
 
     def __init__(self, username, local_path):
         self.username = username
-        self.local_path = local_path
+        with open(f'{local_path}/credentials.json','r') as f:
+            self.credential_paths = json.load(f)
 
     def get_data(self):
 
-        # Initiate Metrica instance
-        metrica = MetricaApi(user=self.username)
-
         # Initiate an inlux instance
-        with open(f'{self.local_path}/credentials.json','r') as f:
-            local_paths = json.load(f)
+        with open(self.credential_paths['metrica'],'r') as f:
+            credentials = json.load(f)
 
-        flux = influx.DataManagement(bucket_name='sensors_meters', organization='envrio', conf_file=local_paths['influx'])
+        # Initiate Metrica instance
+        metrica = MetricaApi(user=self.username, credentials_metrica=credentials)
+
+        flux = influx.DataManagement(bucket_name='sensors_meters', organization='envrio', conf_file=self.credential_paths['influx'])
 
         # Retrieve all metrica stations
         stations_info = [{"id":station.Stations.id,"date_created":station.Stations.date_created,"latest_update":station.Stations.latest_update,"code":station.Stations.code,"name":station.Stations.name} for station in crud.Stations.get_by_brand(brand='metrica')]
@@ -179,14 +181,14 @@ class MetricaDataRetriever():
 
     def get_data_historic(self, from_datetime, station_code=None):
 
-        # Initiate Metrica instance
-        metrica = MetricaApi(user=self.username)
-
         # Initiate an inlux instance
-        with open(f'{self.local_path}/credentials.json','r') as f:
-            local_paths = json.load(f)
+        with open(self.credential_paths['metrica'],'r') as f:
+            credentials = json.load(f)
 
-        flux = influx.DataManagement(bucket_name='sensors_meters', organization='envrio', conf_file=local_paths['influx'])
+        # Initiate Metrica instance
+        metrica = MetricaApi(user=self.username, credentials_metrica=credentials)
+
+        flux = influx.DataManagement(bucket_name='sensors_meters', organization='envrio', conf_file=self.credential_paths['influx'])
 
         # Retrieve all metrica stations
         if station_code:

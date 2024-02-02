@@ -1,24 +1,15 @@
-__version__="1.1.0"
+__version__="1.2.0"
 __authors__=['Ioannis Tsakmakis']
 __date_created__='2023-11-27'
 __last_updated__='2024-02-02'
 
-import json, requests, xmltodict
+import requests, xmltodict
 import pandas as pd
 from datetime import datetime, timedelta
 
-with open("credentials.json","r") as f:
-    credentials = json.loads(f.read())
-
-with open(credentials['davis'],'r') as r:
-    credentials_davis = json.loads(r.read())
-
-with open(credentials['metrica'],'r') as r:
-    credentials_metrica = json.loads(r.read())
-
 class DavisApi():
 
-    def __init__(self,user):
+    def __init__(self, user, credentials_davis):
         self.api_key = credentials_davis[user]["key"]
         self.client_secret = credentials_davis[user]["secret"]
 
@@ -62,7 +53,7 @@ class DavisApi():
 
 class MetricaApi():
 
-    def __init__(self, user):
+    def __init__(self, user, credentials_metrica):
         self.base_url_metrica = credentials_metrica[user]['base_url']
         self.username = credentials_metrica[user]['username']
         self.password = credentials_metrica[user]['password']
