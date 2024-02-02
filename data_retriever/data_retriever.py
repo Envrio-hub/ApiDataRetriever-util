@@ -67,7 +67,7 @@ class DavisDataRetriever():
                     flux.write_point(measurement=sensor['measurement'],sensor_id=sensor['id'],unit=sensor['unit'], data=input_data)
             else:
                 subject_text = {"code":data['code'],"message":f'Station {station["id"]}: {data['message']}'}
-                EmailAlarm.send_alarm(subject_text=json.dumps(subject_text))
+                EmailAlarm(mail_credentials=self.credential_paths['mail']).send_alarm(subject_text=json.dumps(subject_text))
 
         print(f'\ncronjob - davis ended: {datetime.now()}\n')
 
@@ -175,7 +175,7 @@ class MetricaDataRetriever():
                             latest_timestamp = data_dict['date_time'][-1].timestamp()
                     else:
                         subject_text = {"code":404,"message":"No available data for the selected period"}
-                        EmailAlarm.send_alarm(subject_text=json.dumps(subject_text))
+                        EmailAlarm(mail_credentials=self.credential_paths['mail']).send_alarm(subject_text=json.dumps(subject_text))
                 if latest_timestamp>0:
                     crud.Stations.update_latest_update(station['id'],data_dict['date_time'][-1].timestamp())
 
