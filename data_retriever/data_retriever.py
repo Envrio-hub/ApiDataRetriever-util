@@ -1,7 +1,7 @@
-__version__='0.0.2'
+__version__='0.0.3'
 __author__=['Ioannis Tsakmakis']
 __date_created__='2024-01-26'
-__last_updated__='2024-01-30'
+__last_updated__='2024-02-02'
 
 from databases_utils import crud, influx
 from data_retriever.external_apis import DavisApi, MetricaApi
@@ -11,8 +11,9 @@ import json
 
 class DavisDataRetriever():
 
-    def __init__(self, username):
+    def __init__(self, username, local_path):
         self.username = username
+        self.local_path = local_path
 
     def get_data(self):
 
@@ -21,7 +22,7 @@ class DavisDataRetriever():
         # Initiate davis instance
         davis = DavisApi(user=self.username)
 
-        with open('local_paths.json','r') as f:
+        with open(f'{self.local_path}/credentials.json','r') as f:
             local_paths = json.load(f)
 
         # Initiate an inlux instance
@@ -74,7 +75,7 @@ class DavisDataRetriever():
         # Initiate davis instance
         davis = DavisApi(user=self.username)
 
-        with open('local_paths.json','r') as f:
+        with open(f'{self.local_path}/credentials.json','r') as f:
             local_paths = json.load(f)
 
         # Initiate an inlux instance
@@ -120,8 +121,9 @@ class DavisDataRetriever():
 
 class MetricaDataRetriever():
 
-    def __init__(self,username):
+    def __init__(self, username, local_path):
         self.username = username
+        self.local_path = local_path
 
     def get_data(self):
 
@@ -129,7 +131,7 @@ class MetricaDataRetriever():
         metrica = MetricaApi(user=self.username)
 
         # Initiate an inlux instance
-        with open('local_paths.json','r') as f:
+        with open(f'{self.local_path}/credentials.json','r') as f:
             local_paths = json.load(f)
 
         flux = influx.DataManagement(bucket_name='sensors_meters', organization='envrio', conf_file=local_paths['influx'])
@@ -181,7 +183,7 @@ class MetricaDataRetriever():
         metrica = MetricaApi(user=self.username)
 
         # Initiate an inlux instance
-        with open('local_paths.json','r') as f:
+        with open(f'{self.local_path}/credentials.json','r') as f:
             local_paths = json.load(f)
 
         flux = influx.DataManagement(bucket_name='sensors_meters', organization='envrio', conf_file=local_paths['influx'])
