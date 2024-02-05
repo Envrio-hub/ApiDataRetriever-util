@@ -11,6 +11,7 @@ metrica_data_update_manually.py
 metrica_data_update_manually_v0.py
 davis_data_update_manually.py
 davis_data_update.py
+adcon_data_update.py
 
 # folders
 xfarm/*
@@ -20,4 +21,4 @@ davis/*
 data_retriever/__pycache__/*
 
 # html
-documentation.html
+*.html
