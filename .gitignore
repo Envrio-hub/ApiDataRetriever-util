@@ -1,0 +1,20 @@
+# gitignore
+.gitignore
+
+# json
+local_paths.json
+
+# py
+xfarm_data_update_manually.py
+metrica_data_update.py
+metrica_data_update_manually.py
+metrica_data_update_manually_v0.py
+davis_data_update_manually.py
+davis_data_update.py
+
+# folders
+xfarm/*
+adcon/*
+__pycache__/*
+davis/*
+
