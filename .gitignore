@@ -21,4 +21,4 @@ davis/*
 data_retriever/__pycache__/*
 
 # html
-*.html
+documentation.html
