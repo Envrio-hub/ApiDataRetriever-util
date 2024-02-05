@@ -1,10 +1,10 @@
-__version__='0.0.3'
+__version__='0.0.4'
 __author__=['Ioannis Tsakmakis']
 __date_created__='2024-01-26'
-__last_updated__='2024-02-02'
+__last_updated__='2024-02-05'
 
 from databases_utils import crud, influx
-from data_retriever.external_apis import DavisApi, MetricaApi
+from data_retriever.external_apis import DavisApi, MetricaApi, addUPI
 from datetime import datetime, timedelta
 from data_retriever.alarm import EmailAlarm
 import json
@@ -25,6 +25,9 @@ class DavisDataRetriever():
 
         # Initiate davis instance
         davis = DavisApi(user=self.username, credentials_davis=credentials)
+
+        if davis.log_in()['status_code'] != 200:
+            return print(davis.log_in())
 
         # Initiate an inlux instance
         flux = influx.DataManagement(bucket_name='sensors_meters', organization='envrio', conf_file=self.credential_paths['influx'])
@@ -66,8 +69,9 @@ class DavisDataRetriever():
                     input_data = {"date_time":data_dict['date_time'],"values":data_dict[sensor['measurement']]}
                     flux.write_point(measurement=sensor['measurement'],sensor_id=sensor['id'],unit=sensor['unit'], data=input_data)
             else:
-                subject_text = {"code":data['code'],"message":f'Station {station["id"]}: {data['message']}'}
-                EmailAlarm(mail_credentials=self.credential_paths['mail']).send_alarm(subject_text=json.dumps(subject_text))
+                    message_part = {"code":data['code'],"message":f'Station {station["id"]}: {data['message']}'}
+                    message_text = f'Timestamp:{datetime.now()}\n{message_part}'
+                    EmailAlarm(mail_credentials=self.credential_paths['mail']).send_alarm(subject_text=f'Station: {station["name"]["en"]}', message=message_text)
 
         print(f'\ncronjob - davis ended: {datetime.now()}\n')
 
@@ -78,6 +82,9 @@ class DavisDataRetriever():
 
         # Initiate davis instance
         davis = DavisApi(user=self.username, credentials_davis=credentials)
+
+        if davis.log_in().status_code != 200:
+            return print(davis.log_in())
 
         # Initiate an inlux instance
         flux = influx.DataManagement(bucket_name='sensors_meters', organization='envrio', conf_file=self.credential_paths['influx'])
@@ -129,21 +136,24 @@ class MetricaDataRetriever():
 
     def get_data(self):
 
-        # Initiate an inlux instance
+        # Initiate Metrica instance
         with open(self.credential_paths['metrica'],'r') as f:
             credentials = json.load(f)
 
-        # Initiate Metrica instance
         metrica = MetricaApi(user=self.username, credentials_metrica=credentials)
 
+        try_log_in = metrica.log_in()
+        if try_log_in.get('status_code'):
+            if try_log_in['status_code'] == 401:
+                return print(try_log_in)
+
+        # Initiate an inlux instance
         flux = influx.DataManagement(bucket_name='sensors_meters', organization='envrio', conf_file=self.credential_paths['influx'])
 
         # Retrieve all metrica stations
         stations_info = [{"id":station.Stations.id,"date_created":station.Stations.date_created,"latest_update":station.Stations.latest_update,"code":station.Stations.code,"name":station.Stations.name} for station in crud.Stations.get_by_brand(brand='metrica')]
 
         # Get Metrica Access Token
-        try_log_in = metrica.log_in()
-
         if not try_log_in.get('access_token'):
             [print(try_log_in)]
             return try_log_in
@@ -155,13 +165,12 @@ class MetricaDataRetriever():
                 if end - start > 86400:
                     end = start + 86400
                 elif end - start <=0:
-                    print({"error":"","message":"Less than an hour passed since the last update. No new recrods"})
-                    exit()
+                    return print({"error":"","message":"Less than an hour passed since the last update. No new recrods"})
         
                 sensors_info = [{"id":sensor.MonitoredParameters.id,"unit":sensor.MonitoredParameters.unit,"code":sensor.MonitoredParameters.code,
                                 'measurement':sensor.MonitoredParameters.measurement} for sensor in crud.MonitoredParameters.get_by_station_id(station_id=station['id'])]
                 for sensor in sensors_info:
-                    print(f'\nStation : {station['name']}\n',
+                    print(f'\nStation : {station['name']['en']}\n',
                         f'\nSensor: {sensor['measurement']}\n',
                         f'\nStart: {datetime.fromtimestamp(start)}\n',
                         f'\nEnd: {datetime.fromtimestamp(end)}\n')
@@ -174,8 +183,9 @@ class MetricaDataRetriever():
                         if data_dict and len(data_dict)>0:
                             latest_timestamp = data_dict['date_time'][-1].timestamp()
                     else:
-                        subject_text = {"code":404,"message":"No available data for the selected period"}
-                        EmailAlarm(mail_credentials=self.credential_paths['mail']).send_alarm(subject_text=json.dumps(subject_text))
+                        message_part = {"status_code":404, "message":"No available data for the selected period"}
+                        message_text = f'Timestamp:{datetime.now()}\n{message_part}'
+                        EmailAlarm(mail_credentials=self.credential_paths['mail']).send_alarm(subject_text=f'Station: {station['name']['en']} - Sensor: {sensor['measurement']}', message=message_text)
                 if latest_timestamp>0:
                     crud.Stations.update_latest_update(station['id'],data_dict['date_time'][-1].timestamp())
 
@@ -188,6 +198,11 @@ class MetricaDataRetriever():
         # Initiate Metrica instance
         metrica = MetricaApi(user=self.username, credentials_metrica=credentials)
 
+        try_log_in = metrica.log_in()
+        if try_log_in.get('status_code'):
+            if try_log_in['status_code'] == 401:
+                return print(try_log_in)
+
         flux = influx.DataManagement(bucket_name='sensors_meters', organization='envrio', conf_file=self.credential_paths['influx'])
 
         # Retrieve all metrica stations
@@ -197,8 +212,6 @@ class MetricaDataRetriever():
             stations_info = [{"id":station.id,"date_created":station.date_created,"latest_update":station.latest_update,"code":station.code,"name":station.name} for station in crud.Stations.get_by_code(code=station_code)]       
 
         # Get Metrica Access Token
-        try_log_in = metrica.log_in()
-
         if not try_log_in.get('access_token'):
             [print(try_log_in)]
             return try_log_in
@@ -225,4 +238,60 @@ class MetricaDataRetriever():
                         else:
                             print({"code":404,"message":"No available data for the selected period"})    
                 if latest_timestamp>0:
+                    crud.Stations.update_latest_update(station['id'],data_dict['date_time'][-1].timestamp())
+
+class AdconDataRetriever():
+
+    def __init__(self, username, local_path):
+        self.username = username
+        with open(f'{local_path}/credentials.json','r') as f:
+            self.credential_paths = json.load(f)
+
+    def get_data(self):
+
+        # Initiate ADCON instance
+        with open(self.credential_paths['adcon'],'r') as f:
+            credentials = json.load(f)
+
+        adcon = addUPI(user=self.username, credentials_adcon=credentials)
+
+        # Initiate an inlux instance
+        flux = influx.DataManagement(bucket_name='sensors_meters', organization='envrio', conf_file=self.credential_paths['influx'])
+
+        # Retrieve all metrica stations
+        stations_info = [{"id":station.Stations.id,"date_created":station.Stations.date_created,"latest_update":station.Stations.latest_update,"code":station.Stations.code,"name":station.Stations.name} for station in crud.Stations.get_by_brand(brand='adcon')]
+
+        # Retrieving data
+        for station in stations_info:
+            latest_timestamp = None
+            start = station['latest_update']
+            end= datetime.now().timestamp()
+            if end - start > 86400:
+                end = start + 86400
+            elif end - start <=0:
+                return print({"error":"","message":"Less than an hour passed since the last update. No new recrods"})
+
+            sensors_info = [{"id":sensor.MonitoredParameters.id,"unit":sensor.MonitoredParameters.unit,"code":sensor.MonitoredParameters.code,
+                            'measurement':sensor.MonitoredParameters.measurement} for sensor in crud.MonitoredParameters.get_by_station_id(station_id=station['id'])]
+            for sensor in sensors_info:
+                print(f'\nStation : {station['name']['en']}\n',
+                    f'\nSensor: {sensor['measurement']}\n',
+                    f'\nStart: {datetime.fromtimestamp(start)}\n',
+                    f'\nEnd: {datetime.fromtimestamp(end)}\n')
+                data = adcon.get_data(sensor_id=sensor['id'], start=datetime.fromtimestamp(start), end=datetime.fromtimestamp(end))
+                if data.get('values'):
+                    data_dict = {"date_time":[datetime.strptime(f'{data_step["mdate"]}T{data_step["mtime"]}','%Y-%m-%dT%H:%M:%S') for data_step in data['measurements'][0]['values']],
+                                "values":[data_step['mvalue'] for data_step in data['measurements'][0]['values']]}
+                    flux.write_point(measurement=sensor['measurement'],sensor_id=sensor['id'],unit=sensor['unit'], data=data_dict)
+                    if data_dict and len(data_dict)>0:
+                        latest_timestamp = data_dict['date_time'][-1].timestamp()
+                else:
+                    message_part = data
+                    message_text = f'''Timestamp:{datetime.now()}
+                                       Station: {station['name']['en']}
+                                       Measurement: {sensor['measurement']}
+                                       Sensor ID: {sensor['id']}
+                                       Message: {message_part}'''
+                    EmailAlarm(mail_credentials=self.credential_paths['mail']).send_alarm(subject_text=f'Station: {station['name']['en']}', message=message_text)
+                if latest_timestamp:
                     crud.Stations.update_latest_update(station['id'],data_dict['date_time'][-1].timestamp())

@@ -1,7 +1,7 @@
-__version__="1.2.0"
+__version__="1.2.1"
 __authors__=['Ioannis Tsakmakis']
 __date_created__='2023-11-27'
-__last_updated__='2024-02-02'
+__last_updated__='2024-02-05'
 
 import requests, xmltodict
 import pandas as pd
@@ -10,8 +10,15 @@ from datetime import datetime, timedelta
 class DavisApi():
 
     def __init__(self, user, credentials_davis):
-        self.api_key = credentials_davis[user]["key"]
-        self.client_secret = credentials_davis[user]["secret"]
+        if user in credentials_davis.keys():
+            self.api_key = credentials_davis[user]["key"]
+            self.client_secret = credentials_davis[user]["secret"]
+        else:
+            self.api_key = None
+            self.client_secret = None
+
+    def log_in(self):
+            return {"status_code":401,"message":"Invalid user"}           
 
     def get_stations(self):
         headers = {"X-Api-Secret":self.client_secret}
@@ -54,21 +61,29 @@ class DavisApi():
 class MetricaApi():
 
     def __init__(self, user, credentials_metrica):
-        self.base_url_metrica = credentials_metrica[user]['base_url']
-        self.username = credentials_metrica[user]['username']
-        self.password = credentials_metrica[user]['password']
+        if user in credentials_metrica.keys():
+            self.base_url_metrica = credentials_metrica[user]['base_url']
+            self.username = credentials_metrica[user]['username']
+            self.password = credentials_metrica[user]['password']
+        else:
+            self.base_url_metrica = None
+            self.username = None
+            self.password = None
     
     def log_in(self):
-        try:
-            response = requests.post(f'{self.base_url_metrica}/token', headers={"Content-Type": "application/json"},
-                                     json={"email": self.username, "key": self.password})
+        if self.base_url_metrica:
+            try:
+                response = requests.post(f'{self.base_url_metrica}/token', headers={"Content-Type": "application/json"},
+                                        json={"email": self.username, "key": self.password})
 
-            if response.status_code == 200:
-                return {"message":"successfull authendication","access_token":response.json().get('token')}
-            else:
-                return {f'\nRequest failed with status code {response.status_code}\n'}
-        except Exception as e:
-            return {"status":"","message":e}
+                if response.status_code == 200:
+                    return {"message":"successfull authendication","access_token":response.json().get('token')}
+                else:
+                    return {f'\nRequest failed with status code {response.status_code}\n'}
+            except Exception as e:
+                return {"status":"","message":e}
+        else:
+            return {"status_code":401,"message":"Invalid user"}
         
     def post_stations(self,access_token):
         headers = {"content-type": "application/json",
@@ -105,16 +120,16 @@ class MetricaApi():
 
 class addUPI():
 
-    def __init__(self,url = 'http://scient.static.otenet.gr:82/addUPI',user = "dpth",password = "dpth"):
+    def __init__(self, user, credentials_adcon):
         self.s = requests.Session()
         self.headers = {'content-type': 'application/xml'}
-        params = {'function': 'login', 'user': user, 'passwd': password}
-        response = self.s.get(url, params = params, headers = self.headers)
+        params = {'function': 'login', 'user': credentials_adcon[user]['username'], 'passwd': credentials_adcon[user]['password']}
+        response = self.s.get(credentials_adcon[user]['base_url'], params = params, headers = self.headers)
         if response.status_code == 200:
             self.session_id =  xmltodict.parse(response.text)["response"]["result"]["string"]
-            self.url = url
+            self.url = credentials_adcon[user]['base_url']
         else:
-            raise Exception(f"Fail to connect to the server. status code {response.status_code}")
+            return print({"code":response.status_code,"message":response.text})
 
     def get_config(self,node_id=None,depth=None):
         params = {'function': 'getconfig', 'session-id': self.session_id, 'id': node_id,
@@ -137,18 +152,22 @@ class addUPI():
 
     def get_data(self, sensor_id, start=(datetime.now()- timedelta(hours = 3)), end=datetime.now(), step=1800):
         params = {'function':'getdata', 'session-id': self.session_id, 'id': sensor_id,
-                'date-format':'iso8601', 'date': datetime.fromtimestamp(start).strftime("%Y%m%dT%H:%M:%S"),
-                'slots': int((end- start)/step)} 
+                'date-format':'iso8601', 'date': start.strftime("%Y%m%dT%H:%M:%S"),
+                'slots': int((end.timestamp()- start.timestamp())/step)} 
         data = self.s.get(self.url, params = params, headers = self.headers)
-        if xmltodict.parse(data.text)['response']['node'].get('v'):
-            datadf = pd.DataFrame(xmltodict.parse(data.text)['response']['node']['v'])
-            datadf.loc[0, '@t'] = datetime.strptime(datadf.iloc[0]['@t'], '%Y%m%dT%H:%M:%S')
-            for i in range(1, len(datadf)):
-                datadf.loc[i, '@t'] = datadf.loc[i-1, '@t'] + timedelta(seconds=int(datadf.loc[i, '@t']))
-            data_dict = {"date_time":datadf['@t'].values,"values":datadf['#text'].values}
-            return data_dict
-        else:
-            return {"code":xmltodict.parse(data.text)['response']['node']['error']['@code'],"message":f"Sensor - {sensor_id}: xmltodict.parse(data.text)['response']['node']['error']['@msg']"}
+        if data.status_code == 200:
+            if xmltodict.parse(data.text)['response']['node'].get('v'):
+                datadf = pd.DataFrame(xmltodict.parse(data.text)['response']['node']['v'])
+                datadf.loc[0, '@t'] = datetime.strptime(datadf.iloc[0]['@t'], '%Y%m%dT%H:%M:%S')
+                for i in range(1, len(datadf)):
+                    datadf.loc[i, '@t'] = datadf.loc[i-1, '@t'] + timedelta(seconds=int(datadf.loc[i, '@t']))
+                data_dict = {"date_time":datadf['@t'].values,"values":datadf['#text'].values}
+                return data_dict
+            else:
+                return {"status_code":data.status_code,"error_code":xmltodict.parse(data.text)['response']['node']['error']['@code'],"message":f"{xmltodict.parse(data.text)['response']['node']['error']['@msg']}"}
+        elif data.status_code == 400:
+            return {"status_code":data.status_code,"error_code":xmltodict.parse(data.text)['response']['error']['@code'],"message":f"{xmltodict.parse(data.text)['response']['error']['@msg']}"}
+
 
 class xFarmApi():
 

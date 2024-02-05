@@ -1,9 +1,9 @@
-__version__='0.0.3'
+__version__='0.0.4'
 __author__=['Ioannis Tsakmakis']
 __date_created__='2024-01-26'
-__last_updated__='2024-02-02'
+__last_updated__='2024-02-05'
 
-import smtplib
+import smtplib, json
 from email.message import EmailMessage
 
 class EmailAlarm():
@@ -11,13 +11,16 @@ class EmailAlarm():
     def __init__(self, mail_credentials):
         self.mail_credentials = mail_credentials
 
-    def send_alarm(self, subject_text):
+    def send_alarm(self, subject_text, message):
+
+        with open(self.mail_credentials,'r') as f:
+            credentials = json.load(f)
 
         msg= EmailMessage()
 
-        my_address = self.mail_credentials['email']    #sender address
+        my_address = credentials[6]['mail']    #sender address
 
-        app_generated_password = self.mail_credentials['app_pass']    # gmail generated password
+        app_generated_password = credentials[6]['app_pass']    # gmail generated password
 
         msg["Subject"] = subject_text   #email subject 
 
@@ -25,7 +28,7 @@ class EmailAlarm():
 
         msg["To"] = "xylopodaros@yahoo.gr"     #reciver address
 
-        msg.set_content("This is the body of the email")   #message body
+        msg.set_content(message)   #message body
 
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
             
