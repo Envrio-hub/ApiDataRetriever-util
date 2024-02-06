@@ -1,4 +1,4 @@
-__version__="1.2.1"
+__version__="1.2.2"
 __authors__=['Ioannis Tsakmakis']
 __date_created__='2023-11-27'
 __last_updated__='2024-02-05'
@@ -10,40 +10,54 @@ from datetime import datetime, timedelta
 class DavisApi():
 
     def __init__(self, user, credentials_davis):
-        if user in credentials_davis.keys():
-            self.api_key = credentials_davis[user]["key"]
-            self.client_secret = credentials_davis[user]["secret"]
-        else:
-            self.api_key = None
-            self.client_secret = None
+        self.api_key = credentials_davis[user]["key"] if user in credentials_davis.keys() else None
+        self.client_secret = credentials_davis[user]["secret"] if user in credentials_davis.keys() else None
 
-    def log_in(self):
+    def validate_user(self):
+        if self.api_key:
+            return {"status_code":200,"message":"sucessful user validation"}
+        else:
             return {"status_code":401,"message":"Invalid user"}           
 
     def get_stations(self):
         headers = {"X-Api-Secret":self.client_secret}
         stations = requests.get(url = "https://api.weatherlink.com/v2/stations",params = {"api-key": self.api_key},headers=headers)
-        return stations.json()
+        if stations.status_code == 200:
+            return {"status_code":200,"stations":stations.json()}
+        else:
+            return {"status_code":stations.status_code,"message":stations.json()['message']}
     
     def get_station_metadata(self,station_id):
         headers = {"X-Api-Secret":self.client_secret}
         stations = requests.get(url = f"https://api.weatherlink.com/v2/stations/{station_id}",params = {"api-key": self.api_key},headers=headers)
-        return stations.json()
+        if stations.status_code == 200:
+            return {"status_code":200,"stations":stations.json()}
+        else:
+            return {"status_code":stations.status_code,"message":stations.json()['message']}
     
     def get_sensor_catalog(self):
         headers = {"X-Api-Secret":self.client_secret}
-        stations = requests.get(url = "https://api.weatherlink.com/v2/sensor-catalog",params = {"api-key": self.api_key},headers=headers)
-        return stations.json()  
+        sensors = requests.get(url = "https://api.weatherlink.com/v2/sensor-catalog",params = {"api-key": self.api_key},headers=headers)
+        if sensors.status_code == 200:
+            return {"status_code":200,"sensors":sensors.json()}
+        else:
+            return {"status_code":sensors.status_code,"message":sensors.json()['message']}
 
     def get_sensors(self):
         headers = {"X-Api-Secret":self.client_secret}
-        stations = requests.get(url = "https://api.weatherlink.com/v2/sensors",params = {"api-key": self.api_key},headers=headers)
-        return stations.json()   
+        sensors = requests.get(url = "https://api.weatherlink.com/v2/sensors",params = {"api-key": self.api_key},headers=headers)
+        if sensors.status_code == 200:
+            return {"status_code":200,"sensors":sensors.json()}
+        else:
+            return {"status_code":sensors.status_code,"message":sensors.json()['message']}
     
     def get_current(self,station_id):
         headers = {"X-Api-Secret":self.client_secret}
         station_data = requests.get(url = f"https://api.weatherlink.com/v2/current/{station_id}",params = {"api-key": self.api_key},headers=headers)
-        return station_data.json()
+        if station_data.status_code == 200:
+            return {"status_code":200,"station_data":station_data.json()}
+        else:
+            return {"status_code":station_data.status_code,"message":station_data.json()['message']}
     
     def get_historic(self,station_id,start,end):
         headers = {"X-Api-Secret":self.client_secret}
@@ -51,37 +65,37 @@ class DavisApi():
                                 params = {"api-key": self.api_key,
                                           "start-timestamp": start,
                                           "end-timestamp": end},headers=headers)
-        return station_data.json()
+        if station_data.status_code == 200:
+            return {"status_code":200,"station_data":station_data.json()}
+        else:
+            return {"status_code":station_data.status_code,"message":station_data.json()['message']}
     
     def get_report(self,station_id):
         headers = {"X-Api-Secret":self.client_secret}
         station_report = requests.get(url = f"https://api.weatherlink.com/v2/report/et/{station_id}",params = {"api-key": self.api_key},headers=headers)
-        return station_report.json()
+        if station_report.status_code == 200:
+            return {"status_code":200,"station_repost":station_report.json()}
+        else:
+            return {"status_code":station_report.status_code,"message":station_report.json()['message']}
 
 class MetricaApi():
 
     def __init__(self, user, credentials_metrica):
-        if user in credentials_metrica.keys():
-            self.base_url_metrica = credentials_metrica[user]['base_url']
-            self.username = credentials_metrica[user]['username']
-            self.password = credentials_metrica[user]['password']
-        else:
-            self.base_url_metrica = None
-            self.username = None
-            self.password = None
-    
+        self.base_url_metrica = credentials_metrica[user]['base_url'] if user in credentials_metrica.keys() else None
+        self.username = credentials_metrica[user]['username'] if user in credentials_metrica.keys() else None
+        self.password = credentials_metrica[user]['password'] if user in credentials_metrica.keys() else None
+
     def log_in(self):
         if self.base_url_metrica:
             try:
                 response = requests.post(f'{self.base_url_metrica}/token', headers={"Content-Type": "application/json"},
                                         json={"email": self.username, "key": self.password})
-
                 if response.status_code == 200:
-                    return {"message":"successfull authendication","access_token":response.json().get('token')}
+                    return {"status_code":200,"message":"successfull authendication","access_token":response.json().get('token')}
                 else:
-                    return {f'\nRequest failed with status code {response.status_code}\n'}
+                    return {"status_code": response.status_code}
             except Exception as e:
-                return {"status":"","message":e}
+                return {"status_code":"","message":e}
         else:
             return {"status_code":401,"message":"Invalid user"}
         
@@ -121,15 +135,23 @@ class MetricaApi():
 class addUPI():
 
     def __init__(self, user, credentials_adcon):
-        self.s = requests.Session()
         self.headers = {'content-type': 'application/xml'}
-        params = {'function': 'login', 'user': credentials_adcon[user]['username'], 'passwd': credentials_adcon[user]['password']}
-        response = self.s.get(credentials_adcon[user]['base_url'], params = params, headers = self.headers)
-        if response.status_code == 200:
-            self.session_id =  xmltodict.parse(response.text)["response"]["result"]["string"]
-            self.url = credentials_adcon[user]['base_url']
+        self.credentials = credentials_adcon
+        self.user = user if user in credentials_adcon.keys() else None
+        
+    def log_in(self):
+        if self.user:
+            params = {'function': 'login', 'user': self.credentials[self.user]['username'], 'passwd': self.credentials[self.user]['password']}
+            self.response = requests.get(self.credentials[self.user]['base_url'], params = params, headers = self.headers)
+            if self.response.status_code == 200:
+                self.session_id =  xmltodict.parse(self.response.text)["response"]["result"]["string"]
+                self.url = self.credentials[self.user]['base_url']
+                return {"status_code":200, "message":"successfull authendication"}
+            else:
+                return print({"status_code":self.response.status_code,"message":self.response.text})
         else:
-            return print({"code":response.status_code,"message":response.text})
+            return {"status_code":401,"message":"Invalid user"}
+
 
     def get_config(self,node_id=None,depth=None):
         params = {'function': 'getconfig', 'session-id': self.session_id, 'id': node_id,
@@ -154,7 +176,7 @@ class addUPI():
         params = {'function':'getdata', 'session-id': self.session_id, 'id': sensor_id,
                 'date-format':'iso8601', 'date': start.strftime("%Y%m%dT%H:%M:%S"),
                 'slots': int((end.timestamp()- start.timestamp())/step)} 
-        data = self.s.get(self.url, params = params, headers = self.headers)
+        data = requests.get(self.url, params = params, headers = self.headers)
         if data.status_code == 200:
             if xmltodict.parse(data.text)['response']['node'].get('v'):
                 datadf = pd.DataFrame(xmltodict.parse(data.text)['response']['node']['v'])

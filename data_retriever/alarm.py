@@ -11,7 +11,7 @@ class EmailAlarm():
     def __init__(self, mail_credentials):
         self.mail_credentials = mail_credentials
 
-    def send_alarm(self, subject_text, message):
+    def send_alarm(self, subject_text, message, recipients = ['xylopodaros@yahoo.gr','nikolaoskokkos@gmail.com']):
 
         with open(self.mail_credentials,'r') as f:
             credentials = json.load(f)
@@ -26,7 +26,7 @@ class EmailAlarm():
 
         msg["From"] = my_address      #sender address
 
-        msg["To"] = "xylopodaros@yahoo.gr"     #reciver address
+        msg["To"] =  recipients    #reciver address
 
         msg.set_content(message)   #message body
 

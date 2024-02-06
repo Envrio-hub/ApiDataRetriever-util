@@ -26,7 +26,7 @@ class DavisDataRetriever():
         # Initiate davis instance
         davis = DavisApi(user=self.username, credentials_davis=credentials)
 
-        if davis.log_in()['status_code'] != 200:
+        if davis.validate_user()['status_code'] != 200:
             return print(davis.log_in())
 
         # Initiate an inlux instance
@@ -36,7 +36,10 @@ class DavisDataRetriever():
         stations_info = [{"id":station.Stations.id,"date_created":station.Stations.date_created,"latest_update":station.Stations.latest_update,"code":station.Stations.code} for station in crud.Stations.get_by_brand(brand='davis')]
 
         stations_info_ds = davis.get_stations()
-        station_ids = [station_id['station_id'] for station_id in stations_info_ds['stations']]
+        if stations_info_ds['status_code'] == 200:
+            station_ids = [station_id['station_id'] for station_id in stations_info_ds['stations']['stations']]
+        else:
+            return print(stations_info_ds)
 
         stations_info_filtered = [station_info for station_info in stations_info if int(station_info.get('code')) in station_ids]
 
@@ -46,33 +49,38 @@ class DavisDataRetriever():
             end= datetime.now().timestamp()
             if end - start > 86400:
                 end = start + 86400
-            elif end - start <=0:
-                print({"error":"","message":"Less than an hour passed since the last update. No new recrods"})
-                exit()
+            elif end - start <= 86400:
+                return print({"status_code":200,"message":"Less than an hour passed since the last update. No new recrods"})
             print(f'\nStart: {datetime.fromtimestamp(start)}\n',f'\nEnd: {datetime.fromtimestamp(end)}\n')
             sensors_info = [{"id":sensor.MonitoredParameters.id,"unit":sensor.MonitoredParameters.unit,"code":sensor.MonitoredParameters.code,'measurement':sensor.MonitoredParameters.measurement} for sensor in crud.MonitoredParameters.get_by_station_id(station_id=station['id'])]
             data = davis.get_historic(station_id=station['code'],start=int(start),end=int(end))
-            if data.get('sensors'):
-                data = [data_set['data'] for data_set in data['sensors'] if data_set.get('sensor_type')==30 or data_set.get('sensor_type')==4 or data_set.get('sensor_type')==31]
-                data_dict = {"date_time":[datetime.fromtimestamp(data_step['ts']) for data_step in data[0]],
-                                "air_temperature":[((data_step['temp_out']-32)*5/9) for data_step in data[0]],
-                                "relative_humidity":[data_step['hum_out'] for data_step in data[0]],
-                                "wind_speed":[data_step['wind_speed_avg'] for data_step in data[0]],
-                                "wind_speed_of_gust":[data_step['wind_speed_hi'] for data_step in data[0]],
-                                "wind_from_direction":[data_step['wind_dir_of_prevail'] for data_step in data[0]],
-                                "downwelling_shortwave_flux_in_air":[data_step['solar_rad_avg'] for data_step in data[0]],
-                                "lwe_thickness_of_precipitation_amount":[data_step['rainfall_mm'] for data_step in data[0]],
-                                "water_evapotranspiration_amount":[data_step['et'] for data_step in data[0]]}
-                print(f'Latest data update at {data_dict['date_time'][-1]}')
-                crud.Stations.update_latest_update(station['id'],data_dict['date_time'][-1].timestamp())
-                for sensor in sensors_info:
-                    input_data = {"date_time":data_dict['date_time'],"values":data_dict[sensor['measurement']]}
-                    flux.write_point(measurement=sensor['measurement'],sensor_id=sensor['id'],unit=sensor['unit'], data=input_data)
-            else:
-                    message_part = {"code":data['code'],"message":f'Station {station["id"]}: {data['message']}'}
+            if data['status_code'] == 200:
+                if data['station_data'].get('sensors'):
+                    data = [data_set['data'] for data_set in data['station_data']['sensors'] if data_set.get('sensor_type')==30 or data_set.get('sensor_type')==4 or data_set.get('sensor_type')==31]
+                    data_dict = {"date_time":[datetime.fromtimestamp(data_step['ts']) for data_step in data[0]],
+                                    "air_temperature":[((data_step['temp_out']-32)*5/9) for data_step in data[0]],
+                                    "relative_humidity":[data_step['hum_out'] for data_step in data[0]],
+                                    "wind_speed":[data_step['wind_speed_avg'] for data_step in data[0]],
+                                    "wind_speed_of_gust":[data_step['wind_speed_hi'] for data_step in data[0]],
+                                    "wind_from_direction":[data_step['wind_dir_of_prevail'] for data_step in data[0]],
+                                    "downwelling_shortwave_flux_in_air":[data_step['solar_rad_avg'] for data_step in data[0]],
+                                    "lwe_thickness_of_precipitation_amount":[data_step['rainfall_mm'] for data_step in data[0]],
+                                    "water_evapotranspiration_amount":[data_step['et'] for data_step in data[0]]}
+                    print(f'Latest data update at {data_dict['date_time'][-1]}')
+                    crud.Stations.update_latest_update(station['id'],data_dict['date_time'][-1].timestamp())
+                    for sensor in sensors_info:
+                        input_data = {"date_time":data_dict['date_time'],"values":data_dict[sensor['measurement']]}
+                        flux.write_point(measurement=sensor['measurement'],sensor_id=sensor['id'],unit=sensor['unit'], data=input_data)
+                else:
+                    message_part = {"status_code":data['code'],"message":f'Station {station["id"]}: {data}'}
                     message_text = f'Timestamp:{datetime.now()}\n{message_part}'
                     EmailAlarm(mail_credentials=self.credential_paths['mail']).send_alarm(subject_text=f'Station: {station["name"]["en"]}', message=message_text)
-
+            else:
+                message_part = {"status_code":data['status_code'],"message":data['message']}
+                message_text = f'''
+                                Timestamp:{datetime.now()}
+                                Message:{message_part}'''
+                EmailAlarm(mail_credentials=self.credential_paths['mail']).send_alarm(subject_text=f'Station: {station["name"]["en"]}', message=message_text)
         print(f'\ncronjob - davis ended: {datetime.now()}\n')
 
     def get_data_historic(self, from_datetime, station_code=None):
@@ -83,7 +91,7 @@ class DavisDataRetriever():
         # Initiate davis instance
         davis = DavisApi(user=self.username, credentials_davis=credentials)
 
-        if davis.log_in().status_code != 200:
+        if davis.validate_user()['status_code'] != 200:
             return print(davis.log_in())
 
         # Initiate an inlux instance
@@ -109,23 +117,26 @@ class DavisDataRetriever():
                 print(f'\nStation: {station['name']}\n',f'\nStart: {start}\n',f'\nEnd: {end}\n')
                 sensors_info = [{"id":sensor.MonitoredParameters.id,"unit":sensor.MonitoredParameters.unit,"code":sensor.MonitoredParameters.code,'measurement':sensor.MonitoredParameters.measurement} for sensor in crud.MonitoredParameters.get_by_station_id(station_id=station['id'])]
                 data = davis.get_historic(station_id=station['code'],start=int(start.timestamp()),end=int(end.timestamp()))
-                if data.get('sensors'):
-                    data = [data_set['data'] for data_set in data['sensors'] if data_set.get('sensor_type')==30 or data_set.get('sensor_type')==4 or data_set.get('sensor_type')==31]
-                    data_dict = {"date_time":[datetime.fromtimestamp(data_step['ts']) for data_step in data[0]],
-                                "air_temperature":[((data_step['temp_out']-32)*5/9) for data_step in data[0]],
-                                "relative_humidity":[data_step['hum_out'] for data_step in data[0]],
-                                "wind_speed":[data_step['wind_speed_avg'] for data_step in data[0]],
-                                "wind_speed_of_gust":[data_step['wind_speed_hi'] for data_step in data[0]],
-                                "wind_from_direction":[data_step['wind_dir_of_prevail'] for data_step in data[0]],
-                                "downwelling_shortwave_flux_in_air":[data_step['solar_rad_avg'] for data_step in data[0]],
-                                "lwe_thickness_of_precipitation_amount":[data_step['rainfall_mm'] for data_step in data[0]],
-                                "water_evapotranspiration_amount":[data_step['et'] for data_step in data[0]]}
-                    crud.Stations.update_latest_update(station['id'],data_dict['date_time'][-1].timestamp())
-                    for sensor in sensors_info:
-                        input_data = {"date_time":data_dict['date_time'],"values":data_dict[sensor['measurement']]}
-                        flux.write_point(measurement=sensor['measurement'],sensor_id=sensor['id'],unit=sensor['unit'], data=input_data)
+                if data['status_code'] == 200:
+                    if data['station_data'].get('sensors'):
+                        data = [data_set['data'] for data_set in data['station_data']['sensors'] if data_set.get('sensor_type')==30 or data_set.get('sensor_type')==4 or data_set.get('sensor_type')==31]
+                        data_dict = {"date_time":[datetime.fromtimestamp(data_step['ts']) for data_step in data[0]],
+                                    "air_temperature":[((data_step['temp_out']-32)*5/9) for data_step in data[0]],
+                                    "relative_humidity":[data_step['hum_out'] for data_step in data[0]],
+                                    "wind_speed":[data_step['wind_speed_avg'] for data_step in data[0]],
+                                    "wind_speed_of_gust":[data_step['wind_speed_hi'] for data_step in data[0]],
+                                    "wind_from_direction":[data_step['wind_dir_of_prevail'] for data_step in data[0]],
+                                    "downwelling_shortwave_flux_in_air":[data_step['solar_rad_avg'] for data_step in data[0]],
+                                    "lwe_thickness_of_precipitation_amount":[data_step['rainfall_mm'] for data_step in data[0]],
+                                    "water_evapotranspiration_amount":[data_step['et'] for data_step in data[0]]}
+                        crud.Stations.update_latest_update(station['id'],data_dict['date_time'][-1].timestamp())
+                        for sensor in sensors_info:
+                            input_data = {"date_time":data_dict['date_time'],"values":data_dict[sensor['measurement']]}
+                            flux.write_point(measurement=sensor['measurement'],sensor_id=sensor['id'],unit=sensor['unit'], data=input_data)
+                    else:
+                        print({"status_code":data['code'],"message":f'Station {station["id"]}: {data['message']}'})
                 else:
-                    print({"code":data['code'],"message":f'Station {station["id"]}: {data['message']}'})
+                    return print(data)
 
 class MetricaDataRetriever():
 
@@ -143,9 +154,8 @@ class MetricaDataRetriever():
         metrica = MetricaApi(user=self.username, credentials_metrica=credentials)
 
         try_log_in = metrica.log_in()
-        if try_log_in.get('status_code'):
-            if try_log_in['status_code'] == 401:
-                return print(try_log_in)
+        if try_log_in['status_code'] != 200:
+            return print(try_log_in)
 
         # Initiate an inlux instance
         flux = influx.DataManagement(bucket_name='sensors_meters', organization='envrio', conf_file=self.credential_paths['influx'])
@@ -155,7 +165,6 @@ class MetricaDataRetriever():
 
         # Get Metrica Access Token
         if not try_log_in.get('access_token'):
-            [print(try_log_in)]
             return try_log_in
         else:
             # Retrieving data
@@ -164,8 +173,8 @@ class MetricaDataRetriever():
                 end= datetime.now().timestamp()
                 if end - start > 86400:
                     end = start + 86400
-                elif end - start <=0:
-                    return print({"error":"","message":"Less than an hour passed since the last update. No new recrods"})
+                elif end - start <=86400:
+                    return {"status_code":200,"message":"Less than an hour passed since the last update. No new recrods"}
         
                 sensors_info = [{"id":sensor.MonitoredParameters.id,"unit":sensor.MonitoredParameters.unit,"code":sensor.MonitoredParameters.code,
                                 'measurement':sensor.MonitoredParameters.measurement} for sensor in crud.MonitoredParameters.get_by_station_id(station_id=station['id'])]
@@ -184,8 +193,10 @@ class MetricaDataRetriever():
                             latest_timestamp = data_dict['date_time'][-1].timestamp()
                     else:
                         message_part = {"status_code":404, "message":"No available data for the selected period"}
-                        message_text = f'Timestamp:{datetime.now()}\n{message_part}'
-                        EmailAlarm(mail_credentials=self.credential_paths['mail']).send_alarm(subject_text=f'Station: {station['name']['en']} - Sensor: {sensor['measurement']}', message=message_text)
+                        message_text = f'''
+                        Timestamp:{datetime.now()}
+                        Message:{message_part}'''
+                        EmailAlarm(mail_credentials=self.credential_paths['mail']).send_alarm(subject_text=f'Station: {station['name']['en']}', message=message_text)
                 if latest_timestamp>0:
                     crud.Stations.update_latest_update(station['id'],data_dict['date_time'][-1].timestamp())
 
@@ -199,17 +210,16 @@ class MetricaDataRetriever():
         metrica = MetricaApi(user=self.username, credentials_metrica=credentials)
 
         try_log_in = metrica.log_in()
-        if try_log_in.get('status_code'):
-            if try_log_in['status_code'] == 401:
-                return print(try_log_in)
+        if try_log_in['status_code'] != 200:
+            return print(try_log_in)
 
         flux = influx.DataManagement(bucket_name='sensors_meters', organization='envrio', conf_file=self.credential_paths['influx'])
 
         # Retrieve all metrica stations
         if station_code:
-            stations_info = [{"id":station.Stations.id,"date_created":station.Stations.date_created,"latest_update":station.Stations.latest_update,"code":station.Stations.code,"name":station.Stations.name} for station in crud.Stations.get_by_brand(brand='metrica')]
+            stations_info = [{"id":station.id,"date_created":station.date_created,"latest_update":station.latest_update,"code":station.code,"name":station.name} for station in crud.Stations.get_by_code(code=station_code)]
         else:
-            stations_info = [{"id":station.id,"date_created":station.date_created,"latest_update":station.latest_update,"code":station.code,"name":station.name} for station in crud.Stations.get_by_code(code=station_code)]       
+            stations_info = [{"id":station.Stations.id,"date_created":station.Stations.date_created,"latest_update":station.Stations.latest_update,"code":station.Stations.code,"name":station.Stations.name} for station in crud.Stations.get_by_brand(brand='metrica')]     
 
         # Get Metrica Access Token
         if not try_log_in.get('access_token'):
@@ -255,6 +265,9 @@ class AdconDataRetriever():
 
         adcon = addUPI(user=self.username, credentials_adcon=credentials)
 
+        if adcon.log_in()['status_code'] != 200:
+            return print(adcon.log_in())
+
         # Initiate an inlux instance
         flux = influx.DataManagement(bucket_name='sensors_meters', organization='envrio', conf_file=self.credential_paths['influx'])
 
@@ -268,7 +281,7 @@ class AdconDataRetriever():
             end= datetime.now().timestamp()
             if end - start > 86400:
                 end = start + 86400
-            elif end - start <=0:
+            elif end - start <=86400:
                 return print({"error":"","message":"Less than an hour passed since the last update. No new recrods"})
 
             sensors_info = [{"id":sensor.MonitoredParameters.id,"unit":sensor.MonitoredParameters.unit,"code":sensor.MonitoredParameters.code,
@@ -287,11 +300,12 @@ class AdconDataRetriever():
                         latest_timestamp = data_dict['date_time'][-1].timestamp()
                 else:
                     message_part = data
-                    message_text = f'''Timestamp:{datetime.now()}
-                                       Station: {station['name']['en']}
-                                       Measurement: {sensor['measurement']}
-                                       Sensor ID: {sensor['id']}
-                                       Message: {message_part}'''
+                    message_text = f'''
+                    Timestamp:{datetime.now()}
+                    Station: {station['name']['en']}
+                    Measurement: {sensor['measurement']}
+                    Sensor ID: {sensor['id']}
+                    Message: {message_part}'''
                     EmailAlarm(mail_credentials=self.credential_paths['mail']).send_alarm(subject_text=f'Station: {station['name']['en']}', message=message_text)
                 if latest_timestamp:
                     crud.Stations.update_latest_update(station['id'],data_dict['date_time'][-1].timestamp())
