@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='data_retriever',
-    version='0.0.1',
+    version='0.0.2',
     description='A library that contains method to retrieve data from third party APIs',
     author='Ioannis Tsakmakis, Nikolaos Kokkos',
     author_email='itsakmak@envrio.org, nkokkos@envrio.org',

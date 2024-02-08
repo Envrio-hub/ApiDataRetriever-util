@@ -1,12 +1,13 @@
-__version__='0.0.4'
+__version__='0.0.5'
 __author__=['Ioannis Tsakmakis']
 __date_created__='2024-01-26'
-__last_updated__='2024-02-05'
+__last_updated__='2024-02-07'
 
 from databases_utils import crud, influx
 from data_retriever.external_apis import DavisApi, MetricaApi, addUPI
 from datetime import datetime, timedelta
 from data_retriever.alarm import EmailAlarm
+from data_retriever.email_template import EmailTemplate
 import json
 
 class DavisDataRetriever():
@@ -32,7 +33,7 @@ class DavisDataRetriever():
         # Initiate an inlux instance
         flux = influx.DataManagement(bucket_name='sensors_meters', organization='envrio', conf_file=self.credential_paths['influx'])
 
-        # Retrieve all adcon stations
+        # Retrieve all davis stations
         stations_info = [{"id":station.Stations.id,"date_created":station.Stations.date_created,"latest_update":station.Stations.latest_update,"code":station.Stations.code} for station in crud.Stations.get_by_brand(brand='davis')]
 
         stations_info_ds = davis.get_stations()
@@ -48,9 +49,17 @@ class DavisDataRetriever():
             start = station['latest_update']
             end= datetime.now().timestamp()
             if end - start > 86400:
-                end = start + 86400
-            elif end - start <= 86400:
-                return print({"status_code":200,"message":"Less than an hour passed since the last update. No new recrods"})
+                msg = EmailTemplate()
+                message = msg.stopped_reporting(timestamp=datetime.now().strftime('%Y-%m-%d %H:%M'),station_name=station['name']['en'],
+                                                station_code=station['code'],last_upadted=station['latest_update'])
+                subject = f'Station: {station['name']['en']} Stopped Reporting'
+                EmailAlarm(mail_credentials=self.credential_paths['mail']).send_alarm(subject_text=subject, message=message)
+                continue
+            elif end - start > 3600:
+                end = start + 3600
+            elif end - start <= 3600:
+                print({"status_code":200,"message":"Less than an hour passed since the last update. No new recrods"})
+                continue
             print(f'\nStart: {datetime.fromtimestamp(start)}\n',f'\nEnd: {datetime.fromtimestamp(end)}\n')
             sensors_info = [{"id":sensor.MonitoredParameters.id,"unit":sensor.MonitoredParameters.unit,"code":sensor.MonitoredParameters.code,'measurement':sensor.MonitoredParameters.measurement} for sensor in crud.MonitoredParameters.get_by_station_id(station_id=station['id'])]
             data = davis.get_historic(station_id=station['code'],start=int(start),end=int(end))
@@ -97,7 +106,7 @@ class DavisDataRetriever():
         # Initiate an inlux instance
         flux = influx.DataManagement(bucket_name='sensors_meters', organization='envrio', conf_file=self.credential_paths['influx'])
 
-        # Retrieve all adcon stations
+        # Retrieve all davis stations
         if station_code:
             stations_info = [{"id":station.Stations.id,"date_created":station.Stations.date_created,"latest_update":station.Stations.latest_update,"code":station.Stations.code,"name":station.Stations.name} for station in crud.Stations.get_by_brand(brand='davis')]
         else:
@@ -172,10 +181,19 @@ class MetricaDataRetriever():
                 start = station['latest_update']
                 end= datetime.now().timestamp()
                 if end - start > 86400:
-                    end = start + 86400
-                elif end - start <=86400:
-                    return {"status_code":200,"message":"Less than an hour passed since the last update. No new recrods"}
-        
+                    msg = EmailTemplate()
+                    message = msg.stopped_reporting(timestamp=datetime.now().strftime('%Y-%m-%d %H:%M'),
+                                                    station_name=station['name']['en'],
+                                                    station_code=station['code'],
+                                                    last_upadted=datetime.fromtimestamp(station['latest_update']).strftime('%Y-%m-%d %H:%M'))
+                    subject = f'Station: {station['name']['en']} Stopped Reporting'
+                    EmailAlarm(mail_credentials=self.credential_paths['mail']).send_alarm(subject_text=subject, message=message)
+                    continue
+                elif end - start > 3600:
+                    end = start + 3600
+                elif end - start <= 3600:
+                    print({"station":station['name']['en'],"status_code":200,"message":"Less than an hour passed since the last update. No new recrods"})
+                    continue
                 sensors_info = [{"id":sensor.MonitoredParameters.id,"unit":sensor.MonitoredParameters.unit,"code":sensor.MonitoredParameters.code,
                                 'measurement':sensor.MonitoredParameters.measurement} for sensor in crud.MonitoredParameters.get_by_station_id(station_id=station['id'])]
                 for sensor in sensors_info:
@@ -183,22 +201,27 @@ class MetricaDataRetriever():
                         f'\nSensor: {sensor['measurement']}\n',
                         f'\nStart: {datetime.fromtimestamp(start)}\n',
                         f'\nEnd: {datetime.fromtimestamp(end)}\n')
-                    data = metrica.post_data(access_token=try_log_in['access_token'], datefrom=datetime.fromtimestamp(start).date().strftime('%Y-%m-%d'),
-                                            dateto=datetime.fromtimestamp(end).date().strftime('%Y-%m-%d'), timefrom='00:00', timeto='23:55', sensor_id=sensor['code'])
-                    if data['measurements'][0].get('values'):
-                        data_dict = {"date_time":[datetime.strptime(f'{data_step["mdate"]}T{data_step["mtime"]}','%Y-%m-%dT%H:%M:%S') for data_step in data['measurements'][0]['values']],
-                                    "values":[data_step['mvalue'] for data_step in data['measurements'][0]['values']]}
-                        flux.write_point(measurement=sensor['measurement'],sensor_id=sensor['id'],unit=sensor['unit'], data=data_dict)
-                        if data_dict and len(data_dict)>0:
-                            latest_timestamp = data_dict['date_time'][-1].timestamp()
-                    else:
-                        message_part = {"status_code":404, "message":"No available data for the selected period"}
-                        message_text = f'''
-                        Timestamp:{datetime.now()}
-                        Message:{message_part}'''
-                        EmailAlarm(mail_credentials=self.credential_paths['mail']).send_alarm(subject_text=f'Station: {station['name']['en']}', message=message_text)
-                if latest_timestamp>0:
-                    crud.Stations.update_latest_update(station['id'],data_dict['date_time'][-1].timestamp())
+                    data = metrica.post_data(access_token=try_log_in['access_token'],
+                                            datefrom=datetime.fromtimestamp(start).strftime('%Y-%m-%d'),
+                                            dateto=datetime.fromtimestamp(end).strftime('%Y-%m-%d'),
+                                            timefrom=datetime.fromtimestamp(start).strftime('%H:%M'),
+                                            timeto=datetime.fromtimestamp(end).strftime('%H:%M'),
+                                            sensor_id=sensor['code'])
+                    if data['status_code'] == 200:
+                        if data['sensor_data'][0].get('values'):
+                            data_dict = {"date_time":[datetime.strptime(f'{data_step["mdate"]}T{data_step["mtime"]}','%Y-%m-%dT%H:%M:%S') for data_step in data['sensor_data'][0]['values']],
+                                        "values":[data_step['mvalue'] for data_step in data['sensor_data'][0]['values']]}
+                            flux.write_point(measurement=sensor['measurement'],sensor_id=sensor['id'],unit=sensor['unit'], data=data_dict)
+                            if data_dict and len(data_dict)>0:
+                                latest_timestamp = data_dict['date_time'][-1].timestamp()
+                        else:
+                            msg = EmailTemplate()
+                            message = msg.empty_values(timestamp=datetime.now().strftime('%Y-%m-%d %H:%M'), station_name=station['name']['en'],
+                                                       station_code= station['code'], measurement=sensor['measurement'], sensor_id=sensor['id'])
+                            subject = f'Station: {station['name']['en']}'
+                            EmailAlarm(mail_credentials=self.credential_paths['mail']).send_alarm(subject_text=subject, message=message)
+                    if latest_timestamp>0:
+                        crud.Stations.update_latest_update(station['id'],data_dict['date_time'][-1].timestamp())
 
     def get_data_historic(self, from_datetime, station_code=None):
 
@@ -217,9 +240,10 @@ class MetricaDataRetriever():
 
         # Retrieve all metrica stations
         if station_code:
-            stations_info = [{"id":station.id,"date_created":station.date_created,"latest_update":station.latest_update,"code":station.code,"name":station.name} for station in crud.Stations.get_by_code(code=station_code)]
+            stations_info = [{"id":station.Stations.id,"date_created":station.Stations.date_created,"latest_update":station.Stations.latest_update,"code":station.Stations.code,"name":station.Stations.name} for station in crud.Stations.get_by_brand(brand='metrica')] 
         else:
-            stations_info = [{"id":station.Stations.id,"date_created":station.Stations.date_created,"latest_update":station.Stations.latest_update,"code":station.Stations.code,"name":station.Stations.name} for station in crud.Stations.get_by_brand(brand='metrica')]     
+            stations_info = [{"id":station.id,"date_created":station.date_created,"latest_update":station.latest_update,"code":station.code,"name":station.name} for station in crud.Stations.get_by_code(code=station_code)]
+ 
 
         # Get Metrica Access Token
         if not try_log_in.get('access_token'):

@@ -1,7 +1,7 @@
-__version__="1.2.2"
+__version__="1.2.3"
 __authors__=['Ioannis Tsakmakis']
 __date_created__='2023-11-27'
-__last_updated__='2024-02-05'
+__last_updated__='2024-02-07'
 
 import requests, xmltodict
 import pandas as pd
@@ -102,38 +102,38 @@ class MetricaApi():
     def post_stations(self,access_token):
         headers = {"content-type": "application/json",
                    "Authorization": f'Bearer {access_token}'}
-
         response = requests.post(url=f'{self.base_url_metrica}/stations', headers=headers)
-
-        return response.json()
+        if response.status_code == 200:
+            return {"status_code":200,"stations":response.json()}
+        else:
+            return {"status_code":response.status_code,"message":response.text}
     
     def post_sensors(self,access_token,station_id):
         headers = {"content-type": "application/json",
                    "Authorization": f'Bearer {access_token}'}
-        
         json_body = {"station_id": station_id}
-
         response = requests.post(f'{self.base_url_metrica}/sensors',headers=headers, json=json_body)
-        
-        return response.json()
+        if response.status_code == 200:
+            return {"status_code":200,"sensors":response.json()}
+        else:
+            return {"status_code":response.status_code,"message":response.text}
 
     def post_data(self,access_token,datefrom,dateto,timefrom,timeto,sensor_id):
         headers = {'content-type': 'application/json',
                 'Authorization': f'Bearer {access_token}'}
-
         json_body = {
                     'datefrom': datefrom,
                     'dateto': dateto,
                     'timefrom': timefrom,
                     'timeto': timeto,
                     'sensor': [sensor_id]}
-
         response = requests.post(f'{self.base_url_metrica}/measurements', headers=headers, json=json_body)
-
-        return response.json()
+        if response.status_code == 200:
+            return {"status_code":200,"sensor_data":response.json()['measurements']}
+        else:
+            return {"status_code":response.status_code,"message":response.text}
 
 class addUPI():
-
     def __init__(self, user, credentials_adcon):
         self.headers = {'content-type': 'application/xml'}
         self.credentials = credentials_adcon

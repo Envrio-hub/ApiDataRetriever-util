@@ -1,7 +1,7 @@
-__version__='0.0.4'
+__version__='0.0.5'
 __author__=['Ioannis Tsakmakis']
 __date_created__='2024-01-26'
-__last_updated__='2024-02-05'
+__last_updated__='2024-02-07'
 
 import smtplib, json
 from email.message import EmailMessage
@@ -28,7 +28,7 @@ class EmailAlarm():
 
         msg["To"] =  recipients    #reciver address
 
-        msg.set_content(message)   #message body
+        msg.set_content(message, subtype='html')   #message body
 
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
             
