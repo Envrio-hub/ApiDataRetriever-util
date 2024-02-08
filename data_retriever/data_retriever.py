@@ -1,4 +1,4 @@
-__version__='0.0.5'
+__version__='0.0.6'
 __author__=['Ioannis Tsakmakis']
 __date_created__='2024-01-26'
 __last_updated__='2024-02-07'
@@ -178,6 +178,7 @@ class MetricaDataRetriever():
         else:
             # Retrieving data
             for station in stations_info:
+                latest_station_timestamp = 0
                 start = station['latest_update']
                 end= datetime.now().timestamp()
                 if end - start > 86400:
@@ -212,15 +213,21 @@ class MetricaDataRetriever():
                             data_dict = {"date_time":[datetime.strptime(f'{data_step["mdate"]}T{data_step["mtime"]}','%Y-%m-%dT%H:%M:%S') for data_step in data['sensor_data'][0]['values']],
                                         "values":[data_step['mvalue'] for data_step in data['sensor_data'][0]['values']]}
                             flux.write_point(measurement=sensor['measurement'],sensor_id=sensor['id'],unit=sensor['unit'], data=data_dict)
-                            if data_dict and len(data_dict)>0:
-                                latest_timestamp = data_dict['date_time'][-1].timestamp()
+                            if data_dict['date_time']:
+                                if data_dict['date_time'][-1].timestamp() > latest_station_timestamp:
+                                    latest_station_timestamp = data_dict['date_time'][-1].timestamp()
                         else:
                             msg = EmailTemplate()
-                            message = msg.empty_values(timestamp=datetime.now().strftime('%Y-%m-%d %H:%M'), station_name=station['name']['en'],
-                                                       station_code= station['code'], measurement=sensor['measurement'], sensor_id=sensor['id'])
-                            subject = f'Station: {station['name']['en']}'
-                            EmailAlarm(mail_credentials=self.credential_paths['mail']).send_alarm(subject_text=subject, message=message)
-                    if latest_timestamp>0:
+                            # message = msg.empty_values(timestamp=datetime.now().strftime('%Y-%m-%d %H:%M'), station_name=station['name']['en'],
+                            #                            station_code= station['code'], measurement=sensor['measurement'], sensor_id=sensor['id'])
+                            # subject = f'Station: {station['name']['en']}'
+                            # EmailAlarm(mail_credentials=self.credential_paths['mail']).send_alarm(subject_text=subject, message=message)
+                    else:
+                        msg = EmailTemplate()
+                        message = msg.data_error(timestamp=datetime.now().strftime('%Y-%m-%d %H:%M'), station_name=station['name']['en'],
+                                                 station_code= station['code'], measurement=sensor['measurement'], sensor_id=sensor['id'],
+                                                 error_message=data['message'])
+                    if latest_station_timestamp > 0:
                         crud.Stations.update_latest_update(station['id'],data_dict['date_time'][-1].timestamp())
 
     def get_data_historic(self, from_datetime, station_code=None):
