@@ -6,7 +6,7 @@ __last_updated__='2024-02-08'
 class EmailTemplate():
 
     @staticmethod 
-    def stopped_reporting(timestamp, station_name, station_code, last_upadted):
+    def stopped_reporting(timestamp, station_name, station_code, last_communication):
         html = f'''
                 <!DOCTYPE html>
                 <html lang="en">
@@ -46,7 +46,109 @@ class EmailTemplate():
                         </tr>
                         <tr>
                             <td style="padding: 10px; text-align: left; border: 1px solid black;">Last Updated</td>
-                            <td style="padding: 10px; text-align: left; border: 1px solid black;">{last_upadted}</td>
+                            <td style="padding: 10px; text-align: left; border: 1px solid black;">{last_communication}</td>
+                        </tr>
+                    </table>
+                </body>
+                </html>
+            '''
+        return html
+    
+    @staticmethod 
+    def sensor_stopped_reporting(timestamp, station_name, sensor_id, measurement, last_communication):
+        html = f'''
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <style>
+                        body {{
+                            font-family: Arial, sans-serif;
+                            margin: 20px;
+                        }}
+                        #header {{
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: flex-start;
+                            margin-bottom: 20px;
+                        }}
+                        </style>
+                </head>
+                <body>
+                    <div id="header">
+                        <img id="image" src="https://envrio.org/documentation/logo.png" alt="Image Alt Text" style="max-width: 80px; max-height: 80px;">
+                        <div style="font-size: 15px; margin-top: 5px;">Created: {timestamp}</div>
+                    </div>
+
+                    <table style="width: 35%; border-collapse: collapse; margin-top: 20px;">
+                        <tr>
+                            <th colspan="2" style="background-color: #4FC660; padding: 10px; text-align: left; border: 1px solid black;">Sensor Stopped Reporting</th>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; text-align: left; border: 1px solid black;">Station</td>
+                            <td style="padding: 10px; text-align: left; border: 1px solid black;">{station_name}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; text-align: left; border: 1px solid black;">Sensor ID</td>
+                            <td style="padding: 10px; text-align: left; border: 1px solid black;">{sensor_id}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; text-align: left; border: 1px solid black;">Measurement</td>
+                            <td style="padding: 10px; text-align: left; border: 1px solid black;">{measurement}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; text-align: left; border: 1px solid black;">Last Updated</td>
+                            <td style="padding: 10px; text-align: left; border: 1px solid black;">{last_communication}</td>
+                        </tr>
+                    </table>
+                </body>
+                </html>
+            '''
+        return html
+    
+    @staticmethod 
+    def resumed_reporting(timestamp, station_name, station_code, last_communication):
+        html = f'''
+                <!DOCTYPE html>
+                <html lang="en">
+                <head>
+                    <meta charset="UTF-8">
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <style>
+                        body {{
+                            font-family: Arial, sans-serif;
+                            margin: 20px;
+                        }}
+                        #header {{
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: flex-start;
+                            margin-bottom: 20px;
+                        }}
+                        </style>
+                </head>
+                <body>
+                    <div id="header">
+                        <img id="image" src="https://envrio.org/documentation/logo.png" alt="Image Alt Text" style="max-width: 80px; max-height: 80px;">
+                        <div style="font-size: 15px; margin-top: 5px;">Created: {timestamp}</div>
+                    </div>
+
+                    <table style="width: 35%; border-collapse: collapse; margin-top: 20px;">
+                        <tr>
+                            <th colspan="2" style="background-color: #4FC660; padding: 10px; text-align: left; border: 1px solid black;">Station Resumed Reporting</th>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; text-align: left; border: 1px solid black;">Station</td>
+                            <td style="padding: 10px; text-align: left; border: 1px solid black;">{station_name}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; text-align: left; border: 1px solid black;">Station Code</td>
+                            <td style="padding: 10px; text-align: left; border: 1px solid black;">{station_code}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 10px; text-align: left; border: 1px solid black;">Last Communication</td>
+                            <td style="padding: 10px; text-align: left; border: 1px solid black;">{last_communication}</td>
                         </tr>
                     </table>
                 </body>

@@ -2,14 +2,14 @@ from setuptools import setup, find_packages
 
 setup(
     name='data_retriever',
-    version='0.0.2',
+    version='0.0.3',
     description='A library that contains method to retrieve data from third party APIs',
     author='Ioannis Tsakmakis, Nikolaos Kokkos',
     author_email='itsakmak@envrio.org, nkokkos@envrio.org',
     packages=find_packages(),
     python_requires='>=3.12',
     install_requires=[  
-        'databases_utils>=1.1.0',
+        'databases_utils>=1.2.0',
         'requests>=2.31.0',
         'xmltodict>=0.13.0',
         'pandas>=2.1.4'
