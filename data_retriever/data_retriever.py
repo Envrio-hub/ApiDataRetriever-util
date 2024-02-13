@@ -1,7 +1,7 @@
-__version__='0.0.6'
+__version__='0.0.7'
 __author__=['Ioannis Tsakmakis']
 __date_created__='2024-01-26'
-__last_updated__='2024-02-07'
+__last_updated__='2024-02-13'
 
 from databases_utils import crud, influx
 from data_retriever.external_apis import DavisApi, MetricaApi, addUPI
@@ -116,9 +116,9 @@ class DavisDataRetriever():
 
         # Retrieve all davis stations
         if station_code:
-            stations_info = [{"id":station.Stations.id,"date_created":station.Stations.date_created,"last_communication":station.Stations.last_communication,"code":station.Stations.code,"name":station.Stations.name} for station in crud.Stations.get_by_brand(brand='davis')]
-        else:
             stations_info = [{"id":station.id,"date_created":station.date_created,"last_communication":station.last_communication,"code":station.code,"name":station.name} for station in crud.Stations.get_by_code(code=station_code)]
+        else:
+            stations_info = [{"id":station.Stations.id,"date_created":station.Stations.date_created,"last_communication":station.Stations.last_communication,"code":station.Stations.code,"name":station.Stations.name} for station in crud.Stations.get_by_brand(brand='davis')]
                  
         stations_info_ds = davis.get_stations()
         station_ids = [station_id['station_id'] for station_id in stations_info_ds['stations']]
@@ -162,7 +162,32 @@ class MetricaDataRetriever():
         with open(f'{local_path}/credentials.json','r') as f:
             self.credential_paths = json.load(f)
 
-    def get_data(self):
+    def get_station_status(self, station_code=None):
+
+        # Initiate Metrica instance
+        with open(self.credential_paths['metrica'],'r') as f:
+            credentials = json.load(f)
+
+        metrica = MetricaApi(user=self.username, credentials_metrica=credentials)
+
+        try_log_in = metrica.log_in()
+        if try_log_in['status_code'] != 200:
+            return print(try_log_in)
+        
+        stations = metrica.post_stations(access_token=try_log_in['access_token'])
+
+        if stations['status_code'] == 200:
+            keys =  stations['stations'].keys()
+            stations_info = [stations['stations'][i] for i in keys]
+            if station_code:
+                station_info = [station_info for station_info in stations_info if station_info.get('id') == station_code]
+                station_status = [station_info[0].get('last_update')]
+                return {"status_code":200,"station_status":station_status}
+            else:
+                station_status = [{station_info.get('id'):station_info.get('last_update')} for station_info in stations_info]
+                return {"status_code":200,"station_status":station_status}
+
+    def get_data(self, station_code=None):
 
         # Initiate Metrica instance
         with open(self.credential_paths['metrica'],'r') as f:
@@ -178,9 +203,14 @@ class MetricaDataRetriever():
         flux = influx.DataManagement(bucket_name='sensors_meters', organization='envrio', conf_file=self.credential_paths['influx'])
 
         # Retrieve all metrica stations
-        stations_info = [{"id":station.Stations.id,"date_created":station.Stations.date_created,"last_communication":station.Stations.last_communication,
-                          "code":station.Stations.code,"name":station.Stations.name,"status":station.Stations.status} for station in crud.Stations.get_by_brand(brand='metrica')]
-
+        if station_code:
+            stations_info = [{"id":station.id,"date_created":station.date_created,"last_communication":station.last_communication,
+                              "code":station.code,"name":station.name,"status":station.status} for station in crud.Stations.get_by_code(code=station_code)] 
+        else:
+            stations_info = [{"id":station.Stations.id,"date_created":station.Stations.date_created,
+                              "last_communication":station.Stations.last_communication,"code":station.Stations.code,
+                              "name":station.Stations.name,"status":station.Stations.status} for station in crud.Stations.get_by_brand(brand='metrica')] 
+ 
         # Get Metrica Access Token
         if not try_log_in.get('access_token'):
             return try_log_in
@@ -193,10 +223,12 @@ class MetricaDataRetriever():
                 latest_station_update = start
                 if end - start <= 3600:
                     print({"status_code":200,"message":"Less than an hour passed since the last update. No new recrods"})
-                    continue               
+                    continue             
                 sensors_info = [{"id":sensor.MonitoredParameters.id,"unit":sensor.MonitoredParameters.unit,"code":sensor.MonitoredParameters.code,
-                                'measurement':sensor.MonitoredParameters.measurement,'status':sensor.MonitoredParameters.status} for sensor in crud.MonitoredParameters.get_by_station_id(station_id=station['id'])]
+                                'measurement':sensor.MonitoredParameters.measurement,'status':sensor.MonitoredParameters.status,
+                                'last_communication':sensor.MonitoredParameters.last_communication} for sensor in crud.MonitoredParameters.get_by_station_id(station_id=station['id'])]
                 for sensor in sensors_info:
+                    start = sensor['last_communication']
                     print(f'\nSensor: {sensor['measurement']}\n',
                         f'\nStart: {datetime.fromtimestamp(start)}\n',
                         f'\nEnd: {datetime.fromtimestamp(end)}\n')
@@ -210,13 +242,12 @@ class MetricaDataRetriever():
                         if data['sensor_data'][0].get('values'):
                             data_dict = {"date_time":[datetime.strptime(f'{data_step["mdate"]}T{data_step["mtime"]}','%Y-%m-%dT%H:%M:%S') for data_step in data['sensor_data'][0]['values']],
                                         "values":[data_step['mvalue'] for data_step in data['sensor_data'][0]['values']]}
-                            if data_dict['date_time']:
-                                crud.MonitoredParameters.update_last_communication(monitored_parameter_id=sensor['id'], new_datetime=data_dict['date_time'][-1].timestamp())
-                                if sensor['status'] == 'offline':
-                                    crud.MonitoredParameters.update_status(monitored_parameter_id=sensor['id'], current_status='online')
-                                flux.write_point(measurement=sensor['measurement'],sensor_id=sensor['id'],unit=sensor['unit'], data=data_dict)
-                                if data_dict['date_time'][-1].timestamp() > station['last_communication']:
-                                    latest_station_update = data_dict['date_time'][-1].timestamp()
+                            crud.MonitoredParameters.update_last_communication(monitored_parameter_id=sensor['id'], new_datetime=data_dict['date_time'][-1].timestamp())
+                            if sensor['status'] == 'offline':
+                                crud.MonitoredParameters.update_status(monitored_parameter_id=sensor['id'], current_status='online')
+                            flux.write_point(measurement=sensor['measurement'],sensor_id=sensor['id'],unit=sensor['unit'], data=data_dict)
+                            if data_dict['date_time'][-1].timestamp() > station['last_communication']:
+                                latest_station_update = data_dict['date_time'][-1].timestamp()
                         else:
                             if sensor['status'] == 'online' and end-start>86400:
                                 msg = EmailTemplate()
@@ -271,9 +302,12 @@ class MetricaDataRetriever():
 
         # Retrieve all metrica stations
         if station_code:
-            stations_info = [{"id":station.Stations.id,"date_created":station.Stations.date_created,"last_communication":station.Stations.last_communication,"code":station.Stations.code,"name":station.Stations.name} for station in crud.Stations.get_by_brand(brand='metrica')] 
+            stations_info = [{"id":station.id,"date_created":station.date_created,"last_communication":station.last_communication,
+                              "code":station.code,"name":station.name,"status":station.status} for station in crud.Stations.get_by_code(code=station_code)] 
         else:
-            stations_info = [{"id":station.id,"date_created":station.date_created,"last_communication":station.last_communication,"code":station.code,"name":station.name} for station in crud.Stations.get_by_code(code=station_code)]
+            stations_info = [{"id":station.Stations.id,"date_created":station.Stations.date_created,
+                              "last_communication":station.Stations.last_communication,"code":station.Stations.code,
+                              "name":station.Stations.name,"status":station.Stations.status} for station in crud.Stations.get_by_brand(brand='metrica')] 
  
 
         # Get Metrica Access Token

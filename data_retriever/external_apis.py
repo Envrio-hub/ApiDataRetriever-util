@@ -104,7 +104,7 @@ class MetricaApi():
                    "Authorization": f'Bearer {access_token}'}
         response = requests.post(url=f'{self.base_url_metrica}/stations', headers=headers)
         if response.status_code == 200:
-            return {"status_code":200,"stations":response.json()}
+            return {"status_code":200,"stations":response.json()['stations']}
         else:
             return {"status_code":response.status_code,"message":response.text}
     
