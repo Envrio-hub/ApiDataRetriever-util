@@ -128,7 +128,7 @@ class MetricaApi():
                     'timeto': timeto,
                     'sensor': [sensor_id]}
         response = requests.post(f'{self.base_url_metrica}/measurements', headers=headers, json=json_body)
-        if response.status_code == 200:
+        if response.status_code == 200 and response.json().get('measurements'):
             return {"status_code":200,"sensor_data":response.json()['measurements']}
         else:
             return {"status_code":response.status_code,"message":response.text}

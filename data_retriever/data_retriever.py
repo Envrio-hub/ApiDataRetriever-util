@@ -1,7 +1,7 @@
-__version__='0.0.7'
+__version__='0.0.8'
 __author__=['Ioannis Tsakmakis']
 __date_created__='2024-01-26'
-__last_updated__='2024-02-13'
+__last_updated__='2024-03-01'
 
 from databases_utils import crud, influx
 from data_retriever.external_apis import DavisApi, MetricaApi, addUPI
@@ -35,7 +35,7 @@ class DavisDataRetriever():
 
         # Retrieve all davis stations
         stations_info = [{"id":station.Stations.id,"date_created":station.Stations.date_created,"last_communication":station.Stations.last_communication,
-                          "code":station.Stations.code, "status":station.Stations.status} for station in crud.Stations.get_by_brand(brand='davis')]
+                          "code":station.Stations.code, "name":station.Stations.name, "status":station.Stations.status} for station in crud.Stations.get_by_brand(brand='davis')]
 
         stations_info_ds = davis.get_stations()
         if stations_info_ds['status_code'] == 200:
@@ -121,14 +121,14 @@ class DavisDataRetriever():
             stations_info = [{"id":station.Stations.id,"date_created":station.Stations.date_created,"last_communication":station.Stations.last_communication,"code":station.Stations.code,"name":station.Stations.name} for station in crud.Stations.get_by_brand(brand='davis')]
                  
         stations_info_ds = davis.get_stations()
-        station_ids = [station_id['station_id'] for station_id in stations_info_ds['stations']]
+        station_ids = [station_id['station_id'] for station_id in stations_info_ds['stations']['stations']]
 
         stations_info_filtered = [station_info for station_info in stations_info if int(station_info.get('code')) in station_ids]
     
         # Retrieving data
         for station in stations_info_filtered:
             days = (datetime.now() - from_datetime).days
-            for i in range(1,days):
+            for i in range(1,days+1):
                 start = (from_datetime + timedelta(days=i-1))
                 end= start + timedelta(days=1)
                 print(f'\nStation: {station['name']}\n',f'\nStart: {start}\n',f'\nEnd: {end}\n')
@@ -238,7 +238,7 @@ class MetricaDataRetriever():
                                             timefrom=datetime.fromtimestamp(start).strftime('%H:%M'),
                                             timeto=datetime.fromtimestamp(end).strftime('%H:%M'),
                                             sensor_id=sensor['code'])
-                    if data['status_code'] == 200:
+                    if data['status_code'] == 200 and data.get('sensor_data'):
                         if data['sensor_data'][0].get('values'):
                             data_dict = {"date_time":[datetime.strptime(f'{data_step["mdate"]}T{data_step["mtime"]}','%Y-%m-%dT%H:%M:%S') for data_step in data['sensor_data'][0]['values']],
                                         "values":[data_step['mvalue'] for data_step in data['sensor_data'][0]['values']]}
@@ -263,6 +263,9 @@ class MetricaDataRetriever():
                             else:
                                 print({"status_code":data['status_code'],"message":'No available data for the selected time period'})
                                 continue
+                    elif data['status_code']==200 and data.get('message'):
+                        print(data)
+                        continue
                     else:
                         msg = EmailTemplate()
                         if sensor['status'] == 'online' and end-start>86400:
